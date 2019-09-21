@@ -1,10 +1,11 @@
 require("dotenv").config();
 
+const path = require("path");
 const express = require("express");
+const session = require("express-session");
 const bodyParser = require("body-parser");
 const mongoose = require("mongoose");
-const passport = require("passport");
-const path = require("path");
+const passport = require("./passport");
 
 const app = express();
 const http = require("http").Server(app);
@@ -25,10 +26,42 @@ mongoose
     (err) => console.log("Error connecting to MongoDB: " + err)
   );
 
+app.use(
+  session({
+    secret: "session-secret",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile"] })
+);
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", { failureRedirect: "/" }),
+  (_req, res) => {
+    res.redirect("/game");
+  }
+);
+
+app.get("/auth/logout", (req, res) => {
+  req.logout();
+  res.redirect("/");
+});
+
 app.use(express.static(path.resolve(__dirname, "..", "client")));
 
-app.get("/", function(req, res) {
+app.get("/", (_req, res) => {
   res.sendFile(path.join(__dirname, "../client", "index.html"));
+});
+
+app.get("/game", (_req, res) => {
+  res.sendFile(path.join(__dirname, "../client", "game.html"));
 });
 
 http.listen(process.env.PORT || 3000, () => {

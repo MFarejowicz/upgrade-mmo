@@ -2,11 +2,10 @@
   "name": "upgrade-mmo",
   "version": "0.1.0",
   "description": "Upgrade: The MMO",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "webpack",
-    "dev": "webpack-dev-server"
+    "start": "nodemon --ignore client/ server/app.js"
   },
   "repository": {
     "type": "git",
@@ -19,14 +18,14 @@
   },
   "homepage": "https://github.com/MFarejowicz/upgrade-mmo#readme",
   "devDependencies": {
-    "copy-webpack-plugin": "^5.0.4",
-    "ts-loader": "^6.1.1",
-    "typescript": "^3.6.3",
-    "webpack": "^4.40.2",
-    "webpack-cli": "^3.3.9",
-    "webpack-dev-server": "^3.8.1"
+    "nodemon": "^1.19.2"
   },
   "dependencies": {
-    "phaser": "^3.19.0"
+    "body-parser": "^1.19.0",
+    "dotenv": "^8.1.0",
+    "express": "^4.17.1",
+    "mongoose": "^5.7.1",
+    "passport": "^0.4.0",
+    "socket.io": "^2.3.0"
   }
 }

@@ -1,0 +1,32 @@
+{
+  "name": "upgrade-mmo",
+  "version": "0.1.0",
+  "description": "Upgrade: The MMO",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack",
+    "dev": "webpack-dev-server"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MFarejowicz/upgrade-mmo.git"
+  },
+  "author": "Matt Farejowicz",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MFarejowicz/upgrade-mmo/issues"
+  },
+  "homepage": "https://github.com/MFarejowicz/upgrade-mmo#readme",
+  "devDependencies": {
+    "copy-webpack-plugin": "^5.0.4",
+    "ts-loader": "^6.1.1",
+    "typescript": "^3.6.3",
+    "webpack": "^4.40.2",
+    "webpack-cli": "^3.3.9",
+    "webpack-dev-server": "^3.8.1"
+  },
+  "dependencies": {
+    "phaser": "^3.19.0"
+  }
+}

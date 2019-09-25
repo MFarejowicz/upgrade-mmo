@@ -11,8 +11,9 @@ class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image("player", "img/think.png");
     this.load.image("back1", "img/back1.png");
+    this.load.image("player", "img/think.png");
+    this.load.image("enemy", "img/angry.png");
   }
 
   create() {
@@ -29,12 +30,34 @@ class WorldScene extends Phaser.Scene {
 
   create() {
     this.socket = io();
+    this.otherPlayers = this.physics.add.group();
 
     this.createMap();
-    this.createPlayer();
-    this.updateCamera();
     this.createEnemies();
     this.getInput();
+
+    // listen for web socket events
+    this.socket.on("currentPlayers", (players) => {
+      Object.keys(players).forEach((id) => {
+        if (players[id].playerId === this.socket.id) {
+          this.createPlayer(players[id]);
+        } else {
+          this.addOtherPlayer(players[id]);
+        }
+      });
+    });
+
+    this.socket.on("newPlayer", (playerInfo) => {
+      this.addOtherPlayer(playerInfo);
+    });
+
+    this.socket.on("disconnect", (playerId) => {
+      this.otherPlayers.getChildren().forEach((player) => {
+        if (playerId === player.playerId) {
+          player.destroy();
+        }
+      });
+    });
   }
 
   createMap() {
@@ -56,13 +79,28 @@ class WorldScene extends Phaser.Scene {
     );
   }
 
-  createPlayer() {
-    // set player sprite
-    this.player = this.physics.add.sprite(0, 0, "player");
-    // set player scale
-    this.player.setScale(0.2);
-    // ensure player stops at world bounds
-    this.player.setCollideWorldBounds(true);
+  createPlayer(playerInfo) {
+    // our player sprite created through the physics system
+    this.player = this.add.sprite(0, 0, "player");
+
+    this.container = this.add.container(playerInfo.x, playerInfo.y);
+    this.container.setSize(64, 64);
+    this.physics.world.enable(this.container);
+    this.container.add(this.player);
+
+    // update camera
+    this.updateCamera();
+
+    // don't go out of the map
+    this.container.body.setCollideWorldBounds(true);
+    this.physics.add.collider(this.container, this.spawns);
+  }
+
+  addOtherPlayer(playerInfo) {
+    const otherPlayer = this.add.sprite(playerInfo.x, playerInfo.y, "player");
+    otherPlayer.setTint(Math.random() * 0xffffff);
+    otherPlayer.playerId = playerInfo.playerId;
+    this.otherPlayers.add(otherPlayer);
   }
 
   updateCamera() {
@@ -74,66 +112,80 @@ class WorldScene extends Phaser.Scene {
       GAME_WORLD_SIZE
     );
     // set camera to follow player
-    this.cameras.main.startFollow(this.player);
+    this.cameras.main.startFollow(this.container);
   }
 
   createEnemies() {
     // create group for enemies
-    this.spawns = this.physics.add.group({
-      classType: Phaser.GameObjects.Zone,
-    });
+    this.spawns = this.physics.add.group();
 
     // spawn enemies
-    for (let i = 0; i < 10; i++) {
-      const x = Phaser.Math.RND.between(
-        -HALF_GAME_WORLD_SIZE,
-        HALF_GAME_WORLD_SIZE
-      );
-      const y = Phaser.Math.RND.between(
-        -HALF_GAME_WORLD_SIZE,
-        HALF_GAME_WORLD_SIZE
-      );
+    for (let i = 0; i < 20; i++) {
+      const location = this.getValidLocation();
+      const enemy = this.spawns.create(location.x, location.y, "enemy");
+      enemy.body.setCollideWorldBounds(true);
+      enemy.body.setImmovable();
+    }
+  }
 
-      this.spawns.create(x, y, 20, 20);
+  getValidLocation() {
+    let validLocation = false;
+    let x, y;
+
+    while (!validLocation) {
+      x = Phaser.Math.RND.between(-HALF_GAME_WORLD_SIZE, HALF_GAME_WORLD_SIZE);
+      y = Phaser.Math.RND.between(-HALF_GAME_WORLD_SIZE, HALF_GAME_WORLD_SIZE);
+
+      let occupied = false;
+      this.spawns.getChildren().forEach((child) => {
+        const childOrigin = child.getTopLeft();
+        const childWidth = child.width;
+        const childHeight = child.height;
+        const overlapRectangle = new Phaser.Geom.Rectangle(
+          childOrigin.x - 1.5 * childWidth,
+          childOrigin.y - 1.5 * childHeight,
+          3 * childWidth,
+          3 * childHeight
+        );
+        if (overlapRectangle.contains(x, y)) {
+          occupied = true;
+        }
+      });
+      if (!occupied) validLocation = true;
     }
 
-    // set colliding function
-    this.physics.add.overlap(
-      this.player,
-      this.spawns,
-      this.onMeetEnemy,
-      false,
-      this
-    );
+    return { x, y };
   }
 
-  onMeetEnemy(player, enemy) {
-    // move the enemy to another location
-    enemy.x = Phaser.Math.RND.between(
-      -HALF_GAME_WORLD_SIZE,
-      HALF_GAME_WORLD_SIZE
-    );
-    enemy.y = Phaser.Math.RND.between(
-      -HALF_GAME_WORLD_SIZE,
-      HALF_GAME_WORLD_SIZE
-    );
-  }
+  // onMeetEnemy(player, enemy) {
+  //   // move the enemy to another location
+  //   enemy.x = Phaser.Math.RND.between(
+  //     -HALF_GAME_WORLD_SIZE,
+  //     HALF_GAME_WORLD_SIZE
+  //   );
+  //   enemy.y = Phaser.Math.RND.between(
+  //     -HALF_GAME_WORLD_SIZE,
+  //     HALF_GAME_WORLD_SIZE
+  //   );
+  // }
 
   update() {
-    this.player.body.setVelocity(0);
+    if (this.container) {
+      this.container.body.setVelocity(0);
 
-    // horizontal movement
-    if (this.wasd.left.isDown) {
-      this.player.body.setVelocityX(-PLAYER_SPEED);
-    } else if (this.wasd.right.isDown) {
-      this.player.body.setVelocityX(PLAYER_SPEED);
-    }
+      // horizontal movement
+      if (this.wasd.left.isDown) {
+        this.container.body.setVelocityX(-PLAYER_SPEED);
+      } else if (this.wasd.right.isDown) {
+        this.container.body.setVelocityX(PLAYER_SPEED);
+      }
 
-    // vertical movement
-    if (this.wasd.up.isDown) {
-      this.player.body.setVelocityY(-PLAYER_SPEED);
-    } else if (this.wasd.down.isDown) {
-      this.player.body.setVelocityY(PLAYER_SPEED);
+      // vertical movement
+      if (this.wasd.up.isDown) {
+        this.container.body.setVelocityY(-PLAYER_SPEED);
+      } else if (this.wasd.down.isDown) {
+        this.container.body.setVelocityY(PLAYER_SPEED);
+      }
     }
   }
 

@@ -14,6 +14,7 @@ class BootScene extends Phaser.Scene {
     this.load.image("back1", "img/back1.png");
     this.load.image("player", "img/think.png");
     this.load.image("enemy", "img/angry.png");
+    this.load.image("sword", "img/sword.png");
   }
 
   create() {
@@ -49,6 +50,14 @@ class WorldScene extends Phaser.Scene {
 
     this.socket.on("newPlayer", (playerInfo) => {
       this.addOtherPlayer(playerInfo);
+    });
+
+    this.socket.on("playerMoved", (playerInfo) => {
+      this.otherPlayers.getChildren().forEach((player) => {
+        if (playerInfo.playerId === player.playerId) {
+          player.setPosition(playerInfo.x, playerInfo.y);
+        }
+      });
     });
 
     this.socket.on("disconnect", (playerId) => {
@@ -88,12 +97,28 @@ class WorldScene extends Phaser.Scene {
     this.physics.world.enable(this.container);
     this.container.add(this.player);
 
+    // add weapon
+    this.weapon = this.add.sprite(26, -26, "sword");
+    this.weapon.setScale(0.2);
+    this.weapon.setSize(8, 8);
+    this.physics.world.enable(this.weapon);
+
+    this.container.add(this.weapon);
+    this.attacking = false;
+
     // update camera
     this.updateCamera();
 
     // don't go out of the map
     this.container.body.setCollideWorldBounds(true);
     this.physics.add.collider(this.container, this.spawns);
+    this.physics.add.overlap(
+      this.weapon,
+      this.spawns,
+      this.onMeetEnemy,
+      false,
+      this
+    );
   }
 
   addOtherPlayer(playerInfo) {
@@ -126,6 +151,14 @@ class WorldScene extends Phaser.Scene {
       enemy.body.setCollideWorldBounds(true);
       enemy.body.setImmovable();
     }
+
+    // move enemies
+    this.timedEvent = this.time.addEvent({
+      delay: 1000,
+      callback: this.moveEnemies,
+      callbackScope: this,
+      loop: true,
+    });
   }
 
   getValidLocation() {
@@ -137,15 +170,15 @@ class WorldScene extends Phaser.Scene {
       y = Phaser.Math.RND.between(-HALF_GAME_WORLD_SIZE, HALF_GAME_WORLD_SIZE);
 
       let occupied = false;
-      this.spawns.getChildren().forEach((child) => {
-        const childOrigin = child.getTopLeft();
-        const childWidth = child.width;
-        const childHeight = child.height;
+      this.spawns.getChildren().forEach((enemy) => {
+        const enemyOrigin = enemy.getTopLeft();
+        const enemyWidth = enemy.width;
+        const enemyHeight = enemy.height;
         const overlapRectangle = new Phaser.Geom.Rectangle(
-          childOrigin.x - 1.5 * childWidth,
-          childOrigin.y - 1.5 * childHeight,
-          3 * childWidth,
-          3 * childHeight
+          enemyOrigin.x - 1.5 * enemyWidth,
+          enemyOrigin.y - 1.5 * enemyHeight,
+          3 * enemyWidth,
+          3 * enemyHeight
         );
         if (overlapRectangle.contains(x, y)) {
           occupied = true;
@@ -157,44 +190,101 @@ class WorldScene extends Phaser.Scene {
     return { x, y };
   }
 
-  // onMeetEnemy(player, enemy) {
-  //   // move the enemy to another location
-  //   enemy.x = Phaser.Math.RND.between(
-  //     -HALF_GAME_WORLD_SIZE,
-  //     HALF_GAME_WORLD_SIZE
-  //   );
-  //   enemy.y = Phaser.Math.RND.between(
-  //     -HALF_GAME_WORLD_SIZE,
-  //     HALF_GAME_WORLD_SIZE
-  //   );
-  // }
+  moveEnemies() {
+    this.spawns.getChildren().forEach((enemy) => {
+      const randNumber = Math.floor(Math.random() * 4 + 1);
+
+      switch (randNumber) {
+        case 1:
+          enemy.body.setVelocityX(50);
+          break;
+        case 2:
+          enemy.body.setVelocityX(-50);
+          break;
+        case 3:
+          enemy.body.setVelocityY(50);
+          break;
+        case 4:
+          enemy.body.setVelocityY(50);
+          break;
+        default:
+          enemy.body.setVelocityX(50);
+      }
+    });
+
+    setTimeout(() => {
+      this.spawns.setVelocityX(0);
+      this.spawns.setVelocityY(0);
+    }, 500);
+  }
+
+  onMeetEnemy(_player, enemy) {
+    if (this.attacking) {
+      const location = this.getValidLocation();
+      enemy.x = location.x;
+      enemy.y = location.y;
+    }
+  }
 
   update() {
     if (this.container) {
       this.container.body.setVelocity(0);
 
       // horizontal movement
-      if (this.wasd.left.isDown) {
+      if (this.input.left.isDown) {
         this.container.body.setVelocityX(-PLAYER_SPEED);
-      } else if (this.wasd.right.isDown) {
+      } else if (this.input.right.isDown) {
         this.container.body.setVelocityX(PLAYER_SPEED);
       }
 
       // vertical movement
-      if (this.wasd.up.isDown) {
+      if (this.input.up.isDown) {
         this.container.body.setVelocityY(-PLAYER_SPEED);
-      } else if (this.wasd.down.isDown) {
+      } else if (this.input.down.isDown) {
         this.container.body.setVelocityY(PLAYER_SPEED);
       }
+
+      if (Phaser.Input.Keyboard.JustDown(this.input.space) && !this.attacking) {
+        this.attacking = true;
+        setTimeout(() => {
+          this.attacking = false;
+          this.weapon.angle = 0;
+        }, 150);
+      }
+
+      if (this.attacking) {
+        if (this.weapon.flipX) {
+          this.weapon.angle -= 10;
+        } else {
+          this.weapon.angle += 10;
+        }
+      }
+
+      // emit player movement
+      const x = this.container.x;
+      const y = this.container.y;
+      if (
+        this.container.oldPosition &&
+        (x !== this.container.oldPosition.x ||
+          y !== this.container.oldPosition.y)
+      ) {
+        this.socket.emit("playerMovement", { x, y });
+      }
+      // save old position data
+      this.container.oldPosition = {
+        x: this.container.x,
+        y: this.container.y,
+      };
     }
   }
 
   getInput() {
-    this.wasd = {
+    this.input = {
       up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+      space: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
     };
   }
 }

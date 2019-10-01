@@ -37,6 +37,11 @@ class WorldScene extends Phaser.Scene {
     this.createEnemies();
     this.getInput();
 
+    this.mouseMoved = false;
+    this.input.on("pointermove", () => {
+      this.mouseMoved = true;
+    });
+
     // listen for web socket events
     this.socket.on("currentPlayers", (players) => {
       Object.keys(players).forEach((id) => {
@@ -93,18 +98,27 @@ class WorldScene extends Phaser.Scene {
     this.player = this.add.sprite(0, 0, "player");
 
     this.container = this.add.container(playerInfo.x, playerInfo.y);
-    this.container.setSize(64, 64);
+    this.container.setSize(60, 60);
     this.physics.world.enable(this.container);
     this.container.add(this.player);
 
     // add weapon
-    this.weapon = this.add.sprite(26, -26, "sword");
+    this.weapon = this.add.sprite(0, -44, "sword");
     this.weapon.setScale(0.2);
     this.weapon.setSize(8, 8);
     this.physics.world.enable(this.weapon);
 
     this.container.add(this.weapon);
     this.attacking = false;
+    this.input.on("pointerdown", () => {
+      if (!this.attacking) {
+        this.attacking = true;
+        setTimeout(() => {
+          this.attacking = false;
+          this.weapon.angle = 0;
+        }, 150);
+      }
+    });
 
     // update camera
     this.updateCamera();
@@ -130,12 +144,12 @@ class WorldScene extends Phaser.Scene {
 
   updateCamera() {
     // ensure camera stops at world bounds
-    this.cameras.main.setBounds(
-      -HALF_GAME_WORLD_SIZE,
-      -HALF_GAME_WORLD_SIZE,
-      GAME_WORLD_SIZE,
-      GAME_WORLD_SIZE
-    );
+    // this.cameras.main.setBounds(
+    //   -HALF_GAME_WORLD_SIZE,
+    //   -HALF_GAME_WORLD_SIZE,
+    //   GAME_WORLD_SIZE,
+    //   GAME_WORLD_SIZE
+    // );
     // set camera to follow player
     this.cameras.main.startFollow(this.container);
   }
@@ -231,33 +245,34 @@ class WorldScene extends Phaser.Scene {
       this.container.body.setVelocity(0);
 
       // horizontal movement
-      if (this.input.left.isDown) {
+      if (this.buttons.left.isDown) {
         this.container.body.setVelocityX(-PLAYER_SPEED);
-      } else if (this.input.right.isDown) {
+      } else if (this.buttons.right.isDown) {
         this.container.body.setVelocityX(PLAYER_SPEED);
       }
 
       // vertical movement
-      if (this.input.up.isDown) {
+      if (this.buttons.up.isDown) {
         this.container.body.setVelocityY(-PLAYER_SPEED);
-      } else if (this.input.down.isDown) {
+      } else if (this.buttons.down.isDown) {
         this.container.body.setVelocityY(PLAYER_SPEED);
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.input.space) && !this.attacking) {
-        this.attacking = true;
-        setTimeout(() => {
-          this.attacking = false;
-          this.weapon.angle = 0;
-        }, 150);
+      if (this.mouseMoved) {
+        this.pointer.updateWorldPoint(this.cameras.main);
+        const pointerPoint = {
+          x: this.pointer.worldX,
+          y: this.pointer.worldY,
+        };
+        const angleToPointer = Phaser.Math.Angle.BetweenPoints(
+          this.container,
+          pointerPoint
+        );
+        this.container.rotation = angleToPointer + Math.PI / 2;
       }
 
       if (this.attacking) {
-        if (this.weapon.flipX) {
-          this.weapon.angle -= 10;
-        } else {
-          this.weapon.angle += 10;
-        }
+        this.weapon.angle += 10;
       }
 
       // emit player movement
@@ -279,13 +294,13 @@ class WorldScene extends Phaser.Scene {
   }
 
   getInput() {
-    this.input = {
+    this.buttons = {
       up: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
       down: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       left: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      space: this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
     };
+    this.pointer = this.input.mousePointer;
   }
 }
 

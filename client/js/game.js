@@ -19,6 +19,7 @@ class BootScene extends Phaser.Scene {
 
   create() {
     this.scene.start("WorldScene");
+    this.scene.start("HUDScene");
   }
 }
 
@@ -125,7 +126,7 @@ class WorldScene extends Phaser.Scene {
 
     // don't go out of the map
     this.container.body.setCollideWorldBounds(true);
-    this.physics.add.collider(this.container, this.spawns);
+    // this.physics.add.collider(this.container, this.spawns);
     this.physics.add.overlap(
       this.weapon,
       this.spawns,
@@ -144,14 +145,20 @@ class WorldScene extends Phaser.Scene {
 
   updateCamera() {
     // ensure camera stops at world bounds
-    // this.cameras.main.setBounds(
-    //   -HALF_GAME_WORLD_SIZE,
-    //   -HALF_GAME_WORLD_SIZE,
-    //   GAME_WORLD_SIZE,
-    //   GAME_WORLD_SIZE
-    // );
-    // set camera to follow player
     this.cameras.main.startFollow(this.container);
+  }
+
+  createOneEnemy(location) {
+    const container = this.add.container(location.x, location.y);
+
+    const sprite = this.add.sprite(0, 0, "enemy");
+    container.setSize(sprite.width, sprite.height);
+    container.add(sprite);
+
+    const healthBar = this.add.rectangle(0, -50, 100, 30, 0x00ff00);
+    container.add(healthBar);
+
+    return container;
   }
 
   createEnemies() {
@@ -161,9 +168,11 @@ class WorldScene extends Phaser.Scene {
     // spawn enemies
     for (let i = 0; i < 20; i++) {
       const location = this.getValidLocation();
-      const enemy = this.spawns.create(location.x, location.y, "enemy");
+      const enemy = this.createOneEnemy(location);
+      this.spawns.add(enemy);
+
+      this.physics.world.enable(enemy);
       enemy.body.setCollideWorldBounds(true);
-      enemy.body.setImmovable();
     }
 
     // move enemies
@@ -185,9 +194,10 @@ class WorldScene extends Phaser.Scene {
 
       let occupied = false;
       this.spawns.getChildren().forEach((enemy) => {
-        const enemyOrigin = enemy.getTopLeft();
-        const enemyWidth = enemy.width;
-        const enemyHeight = enemy.height;
+        // Need getFirst to use sprite and not container
+        const enemyOrigin = enemy.getFirst().getTopLeft();
+        const enemyWidth = enemy.getFirst().width;
+        const enemyHeight = enemy.getFirst().height;
         const overlapRectangle = new Phaser.Geom.Rectangle(
           enemyOrigin.x - 1.5 * enemyWidth,
           enemyOrigin.y - 1.5 * enemyHeight,
@@ -304,6 +314,32 @@ class WorldScene extends Phaser.Scene {
   }
 }
 
+class HUDScene extends Phaser.Scene {
+  constructor() {
+    super({
+      key: "HUDScene",
+    });
+  }
+
+  create() {
+    // Our Text object to display the Score
+    const hp = this.add.rectangle(60, 25, 100, 30, 0x00ff00);
+    const gold = this.add.text(10, 50, "Gold: 0", {
+      font: "30px Arial",
+      fill: "#ffffff",
+    });
+
+    // Grab a reference to the Game Scene
+    const ourGame = this.scene.get("WorldScene");
+
+    // //  Listen for events from it
+    // ourGame.events.on("addScore", () => {
+    //   this.score += 10;
+    //   info.setText("Score: " + this.score);
+    // });
+  }
+}
+
 const gameConfig = {
   title: "upgrade",
   type: Phaser.AUTO,
@@ -318,7 +354,7 @@ const gameConfig = {
       debug: true,
     },
   },
-  scene: [BootScene, WorldScene],
+  scene: [BootScene, WorldScene, HUDScene],
 };
 
 const game = new Phaser.Game(gameConfig);

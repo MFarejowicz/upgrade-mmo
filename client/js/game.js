@@ -1,7 +1,6 @@
 const GAME_WORLD_SIZE = 2048;
 const HALF_GAME_WORLD_SIZE = GAME_WORLD_SIZE / 2;
-const PLAYER_SPEED = 100;
-
+const PLAYER_SPEED = 150;
 class BootScene extends Phaser.Scene {
   constructor() {
     super({
@@ -77,13 +76,7 @@ class WorldScene extends Phaser.Scene {
 
   createMap() {
     // set world texture
-    this.map = this.add.tileSprite(
-      0,
-      0,
-      GAME_WORLD_SIZE,
-      GAME_WORLD_SIZE,
-      "back1"
-    );
+    this.map = this.add.tileSprite(0, 0, GAME_WORLD_SIZE, GAME_WORLD_SIZE, "back1");
 
     // set world bounds
     this.physics.world.setBounds(
@@ -95,12 +88,12 @@ class WorldScene extends Phaser.Scene {
   }
 
   createPlayer(playerInfo) {
+    this.container = this.add.container(playerInfo.x, playerInfo.y);
+    this.physics.world.enable(this.container);
+    this.container.setSize(60, 60);
+
     // our player sprite created through the physics system
     this.player = this.add.sprite(0, 0, "player");
-
-    this.container = this.add.container(playerInfo.x, playerInfo.y);
-    this.container.setSize(60, 60);
-    this.physics.world.enable(this.container);
     this.container.add(this.player);
 
     // add weapon
@@ -126,14 +119,9 @@ class WorldScene extends Phaser.Scene {
 
     // don't go out of the map
     this.container.body.setCollideWorldBounds(true);
+    // If you want collisions
     // this.physics.add.collider(this.container, this.spawns);
-    this.physics.add.overlap(
-      this.weapon,
-      this.spawns,
-      this.onMeetEnemy,
-      false,
-      this
-    );
+    this.physics.add.overlap(this.weapon, this.spawns, this.onMeetEnemy, false, this);
   }
 
   addOtherPlayer(playerInfo) {
@@ -144,7 +132,6 @@ class WorldScene extends Phaser.Scene {
   }
 
   updateCamera() {
-    // ensure camera stops at world bounds
     this.cameras.main.startFollow(this.container);
   }
 
@@ -155,7 +142,12 @@ class WorldScene extends Phaser.Scene {
     container.setSize(sprite.width, sprite.height);
     container.add(sprite);
 
+    container.health = 100;
+    const healthBackground = this.add.rectangle(0, -50, 100, 30, 0xff0000);
+    healthBackground.name = "healthBackground";
+    container.add(healthBackground);
     const healthBar = this.add.rectangle(0, -50, 100, 30, 0x00ff00);
+    healthBar.name = "healthBar";
     container.add(healthBar);
 
     return container;
@@ -243,10 +235,20 @@ class WorldScene extends Phaser.Scene {
   }
 
   onMeetEnemy(_player, enemy) {
-    if (this.attacking) {
-      const location = this.getValidLocation();
-      enemy.x = location.x;
-      enemy.y = location.y;
+    if (this.attacking && !enemy.hasBeenAttacked) {
+      enemy.hasBeenAttacked = true;
+      enemy.health -= 30;
+      if (enemy.health <= 0) {
+        enemy.destroy();
+        this.events.emit("test");
+        return;
+      }
+
+      const healthBar = enemy.getByName("healthBar");
+      healthBar.width = enemy.health;
+      setTimeout(() => {
+        enemy.hasBeenAttacked = false;
+      }, 150);
     }
   }
 
@@ -274,10 +276,7 @@ class WorldScene extends Phaser.Scene {
           x: this.pointer.worldX,
           y: this.pointer.worldY,
         };
-        const angleToPointer = Phaser.Math.Angle.BetweenPoints(
-          this.container,
-          pointerPoint
-        );
+        const angleToPointer = Phaser.Math.Angle.BetweenPoints(this.container, pointerPoint);
         this.container.rotation = angleToPointer + Math.PI / 2;
       }
 
@@ -290,8 +289,7 @@ class WorldScene extends Phaser.Scene {
       const y = this.container.y;
       if (
         this.container.oldPosition &&
-        (x !== this.container.oldPosition.x ||
-          y !== this.container.oldPosition.y)
+        (x !== this.container.oldPosition.x || y !== this.container.oldPosition.y)
       ) {
         this.socket.emit("playerMovement", { x, y });
       }
@@ -332,11 +330,12 @@ class HUDScene extends Phaser.Scene {
     // Grab a reference to the Game Scene
     const ourGame = this.scene.get("WorldScene");
 
-    // //  Listen for events from it
-    // ourGame.events.on("addScore", () => {
-    //   this.score += 10;
-    //   info.setText("Score: " + this.score);
-    // });
+    // Listen to events from the WorldScene
+    ourGame.events.on("test", () => {
+      get("/api/gold").then((data) => {
+        console.log(data);
+      });
+    });
   }
 }
 

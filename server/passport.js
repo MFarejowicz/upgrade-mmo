@@ -7,20 +7,20 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/auth/google/callback",
+      callbackURL: "/auth/google/callback"
     },
     async (_accessToken, _refreshToken, profile, done) => {
       let user = await User.findOne({
-        google_id: profile.id,
+        google_id: profile.id
       });
       if (!user) {
         user = new User({
           name: profile.displayName,
           google_id: profile.id,
+          gold: 0
         });
         user = await user.save();
       }
-      console.log(user);
       done(null, user);
     }
   )

@@ -11,6 +11,8 @@ const app = express();
 const http = require("http").Server(app);
 const io = require("socket.io").listen(http);
 
+const api = require("./routes/api");
+
 const players = {};
 
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -39,13 +41,12 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.get(
-  "/auth/google",
-  passport.authenticate("google", { scope: ["profile"] })
-);
+app.use("/api", api);
+
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile"] }));
 app.get(
   "/auth/google/callback",
-  passport.authenticate("google", { failureRedirect: "/" }),
+  passport.authenticate("google", { failureRedirect: "/", session: true }),
   (_req, res) => {
     res.redirect("/game");
   }
@@ -64,6 +65,11 @@ app.get("/", (_req, res) => {
 
 app.get("/game", (_req, res) => {
   res.sendFile(path.join(__dirname, "../client", "game.html"));
+});
+
+app.get("/api/gold", (req, res) => {
+  const user = req.user;
+  console.log(user);
 });
 
 io.on("connection", (socket) => {
